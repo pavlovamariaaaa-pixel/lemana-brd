@@ -195,9 +195,9 @@ export default function Home() {
           .av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px}
           .msg.agent .av{background:var(--y)}
           .msg.user .av{background:var(--text);color:#fff;font-size:9px;font-family:'Unbounded',sans-serif;font-weight:700}
-          .bub{padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.65;white-space:pre-wrap}
-          .msg.agent .bub{background:#fff;border:1px solid var(--border);border-radius:3px 10px 10px 10px}
-          .msg.user .bub{background:var(--text);color:#fff;border-radius:10px 3px 10px 10px}
+          .bub{padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+          .msg.agent .bub{background:#fff;border:1px solid var(--border);border-radius:3px 10px 10px 10px;color:#1a1a1a}
+          .msg.user .bub{background:#1a1a1a;color:#ffffff;border-radius:10px 3px 10px 10px}
           .typing{display:flex;gap:3px;padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:3px 10px 10px 10px;width:fit-content;margin-left:36px}
           .td{width:5px;height:5px;border-radius:50%;background:var(--yd);animation:b .8s infinite}
           .td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
