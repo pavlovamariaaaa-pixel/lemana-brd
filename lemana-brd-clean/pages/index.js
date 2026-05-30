@@ -86,7 +86,7 @@ export default function Home() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 800, system: sys, messages: newHist }),
+      body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 800, system: sys, messages: newHist }),
     });
     const data = await res.json();
     if (!res.ok || !data.content) {
