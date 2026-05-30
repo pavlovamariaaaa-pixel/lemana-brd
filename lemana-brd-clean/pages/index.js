@@ -89,6 +89,10 @@ export default function Home() {
       body: JSON.stringify({ model: 'claude-3-5-sonnet-20241022', max_tokens: 800, system: sys, messages: newHist }),
     });
     const data = await res.json();
+    if (!res.ok || !data.content) {
+      const errMsg = data.error?.message || JSON.stringify(data);
+      return { reply: `Ошибка API: ${errMsg}`, newHist };
+    }
     return { reply: data.content?.[0]?.text || '', newHist };
   }
 
