@@ -237,7 +237,7 @@ export default function Home() {
       await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: ROLE_NAMES[role], name: userName, status: userStatus, summary: reply, date: new Date().toLocaleDateString('ru-RU') }),
+        body: JSON.stringify({ role: ROLE_NAMES[role], name: userName, status: userStatus, summary: reply, date: new Date().toLocaleDateString('ru-RU'), transcript: histRef.current }),
       });
       setSaved(true);
     } catch (e) { console.error(e); }

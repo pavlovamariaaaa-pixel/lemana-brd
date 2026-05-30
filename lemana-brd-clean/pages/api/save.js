@@ -1,12 +1,23 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { date, role, name, status, summary } = req.body;
+  const { date, role, name, status, summary, transcript } = req.body;
 
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const safeName = (name || 'unknown').replace(/[^a-zA-Zа-яА-Я0-9_-]/g, '_');
     const path = `results/${timestamp}-${safeName}.md`;
+
+    const transcriptMd = Array.isArray(transcript) && transcript.length
+      ? transcript
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .map(m => {
+            const label = m.role === 'user' ? `**${name}:**` : '**Агент:**';
+            const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+            return `${label}\n${text}`;
+          })
+          .join('\n\n---\n\n')
+      : '_Диалог не записан_';
 
     const content = `# Конспект интервью · Бесконечная лента · Lemana PRO
 
@@ -18,6 +29,10 @@ export default async function handler(req, res) {
 ---
 
 ${summary}
+
+## Полный диалог
+
+${transcriptMd}
 `;
 
     const response = await fetch(
