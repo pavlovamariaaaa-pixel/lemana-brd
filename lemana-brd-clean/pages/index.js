@@ -27,6 +27,72 @@ const ROLE_CTX = {
   head:    'Собеседник — руководитель. Фокус: стратегические приоритеты ленты, какие бизнес-цели она решает, ограничения по ресурсам, видимые риски, критерий успеха.',
 };
 
+
+const QUICK_REPLIES = {
+  screens: [
+    'Главная страница (веб)',
+    'Главная (мобайл)',
+    'PDP — карточка товара',
+    'PLP — страница категории',
+    'Корзина',
+    'Поиск / SRP',
+    'Избранное',
+    'Пустая корзина',
+    'Страница услуги',
+    'Thank you page',
+    'Личный кабинет',
+    'Пустая выдача поиска',
+    'Проектные лендинги',
+  ],
+  client: [
+    'Авторизованный с историей покупок (знаем профиль из CDP)',
+    'Авторизованный без истории (новый)',
+    'Анонимный пользователь',
+    'B2B / профессионал',
+    'Персонализация по ценовому сегменту',
+    'Персонализация по интересам (ремонт, декор, сад…)',
+    'Персонализация по истории просмотров',
+    'Все сегменты — разная глубина персонализации',
+  ],
+  funnel: [
+    'Прямой заход — знает Lemana, высокое намерение',
+    'Из органического поиска по запросу',
+    'Из ремаркетинга — уже был на сайте',
+    'Из соцсетей / вдохновения — намерение не сформировано',
+    'Сохранённое намерение — возвращается к прерванному',
+    'Стадия выбора — сравнивает варианты',
+    'Стадия покупки — готов купить',
+    'Постпокупочный визит',
+  ],
+  content: [
+    'Lifestyle-фото — основа ленты (60%+)',
+    'Товары с ценой и CTA',
+    'Товары с рейтингом и отзывами',
+    'Советы и инструкции',
+    'Статьи и гайды',
+    'Категории товаров',
+    'Услуги Lemana',
+    'Готовые решения / проекты',
+    'Акции и спецпредложения',
+    'Баннеры маркетинговых активностей',
+    'Сезонные подборки',
+    'Отзывы покупателей',
+  ],
+  backend: [
+    'DAM — источник lifestyle-контента',
+    'CDP — профиль и сегменты клиента',
+    'Прайсинг-сервис — цены в реальном времени',
+    'Платформа отзывов и рейтингов',
+    'Сервис персонализации (уже есть)',
+    'Товарные рекомендации',
+    'Маркетинговая платформа — акции и промо',
+    'Правила показа настраивает маркетинг (без кода)',
+    'Правила показа настраивает разработка',
+    'ML-ранжирование на основе поведения',
+    'A/B тестирование вариантов ленты',
+  ],
+};
+
 function sysPrompt(role) {
   return `Ты — AI-агент, собирающий бизнес-требования для «Бесконечной ленты вдохновения» Lemana PRO (бывший Leroy Merlin, DIY-ритейлер, 112 магазинов).
 
@@ -206,7 +272,12 @@ export default function Home() {
           .td{width:5px;height:5px;border-radius:50%;background:var(--yd);animation:b .8s infinite}
           .td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
           @keyframes b{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-4px)}}
-          .inp-area{padding:12px 20px;background:#fff;border-top:1px solid var(--border);flex-shrink:0}
+          
+          .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 20px 0}
+          .chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#fff;font-size:11px;color:var(--text2);cursor:pointer;transition:.12s;font-family:'Inter',sans-serif;white-space:nowrap}
+          .chip:hover{border-color:var(--yd);color:var(--yd);background:var(--yl)}
+          .chip.selected{border-color:var(--yd);background:var(--yl);color:var(--yd);font-weight:500}
+          .inp-area{padding:8px 20px 12px;background:#fff;border-top:1px solid var(--border);flex-shrink:0}
           .inp-wrap{display:flex;gap:8px;align-items:flex-end;background:var(--bg);border-radius:10px;padding:8px 12px;border:1px solid var(--border);transition:.12s}
           .inp-wrap:focus-within{border-color:var(--yd);background:#fff}
           textarea{flex:1;border:none;background:transparent;outline:none;font-family:'Inter',sans-serif;font-size:13px;color:var(--text);resize:none;max-height:100px;min-height:20px;line-height:1.5}
@@ -238,11 +309,17 @@ export default function Home() {
         <div className="sidebar">
           <div className="sidebar-hd">Ваша роль</div>
           {ROLES.map(r => (
-            <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => screen === 'start' && setRole(r.id)}>
+            <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => setRole(r.id)}>
               <div className="role-name">{r.name}</div>
               <div className="role-desc">{r.desc}</div>
             </button>
           ))}
+          <div className="sep" />
+          {screen === 'start' ? (
+            <button className="start-btn" style={{margin:'12px 14px',width:'calc(100% - 28px)'}} onClick={startInterview}>Начать →</button>
+          ) : (
+            <button onClick={reset} style={{margin:'12px 14px',width:'calc(100% - 28px)',padding:'8px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg)',cursor:'pointer',fontSize:'12px',color:'var(--text2)'}}>↩ Начать заново</button>
+          )}
           {screen !== 'start' && <>
             <div className="sep" />
             <div className="prog-hd">Прогресс</div>
@@ -272,6 +349,17 @@ export default function Home() {
               ))}
               {busy && <div className="typing"><div className="td" /><div className="td" /><div className="td" /></div>}
               <div ref={msgsEndRef} />
+            </div>
+            <div className="chips">
+              {(QUICK_REPLIES[TOPICS[Math.min(topicIdx, TOPICS.length-1)]?.id] || []).map((chip, i) => (
+                <button key={i} className={`chip${input.includes(chip) ? ' selected' : ''}`}
+                  onClick={() => setInput(prev => {
+                    if (prev.includes(chip)) return prev.replace(', ' + chip, '').replace(chip + ', ', '').replace(chip, '').trim();
+                    return prev ? prev + ', ' + chip : chip;
+                  })}>
+                  {chip}
+                </button>
+              ))}
             </div>
             <div className="inp-area">
               <div className="inp-wrap">
