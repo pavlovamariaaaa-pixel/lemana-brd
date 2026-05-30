@@ -1,4 +1,4 @@
-imporimport { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 
 const TOPICS = [
@@ -19,6 +19,15 @@ const ROLES = [
 
 const ROLE_NAMES = { pm: 'Product Manager', content: 'Content', media: 'Media Production', dev: 'Разработка', head: 'Руководитель' };
 
+const STATUS_LIST = [
+  'Бизнес-заказчик',
+  'Продукт / PM',
+  'Разработка',
+  'Маркетинг',
+  'Контент',
+  'Другое',
+];
+
 const ROLE_CTX = {
   pm:      'Собеседник — Product Manager. Фокус: какие экраны приоритетны, как ранжируем их, какие сценарии клиентского пути хотим охватить, критерии успеха фичи, метрики.',
   content: 'Собеседник — редактор или контент-менеджер. Фокус: какие типы контента планируем в ленту (советы, статьи, галереи, отзывы, категории), в каких пропорциях миксовать, кто принимает решения о попадании в ленту.',
@@ -26,7 +35,6 @@ const ROLE_CTX = {
   dev:     'Собеседник — разработчик или технический архитектор. Фокус: откуда берём данные (цена, рейтинг, отзывы, товары), какие системы интегрируем (DAM, CDP, прайсинг), текущие технические ограничения.',
   head:    'Собеседник — руководитель. Фокус: стратегические приоритеты ленты, какие бизнес-цели она решает, ограничения по ресурсам, видимые риски, критерий успеха.',
 };
-
 
 const QUICK_REPLIES = {
   screens: [
@@ -93,12 +101,14 @@ const QUICK_REPLIES = {
   ],
 };
 
-function sysPrompt(role) {
+function sysPrompt(role, name, status) {
   return `Ты — AI-агент, собирающий бизнес-требования для «Бесконечной ленты вдохновения» Lemana PRO (бывший Leroy Merlin, DIY-ритейлер, 112 магазинов).
 
 КОНЦЕПЦИЯ: Персонализированная бесконечная лента на сайте и в приложении. Визуально: lifestyle-фотографии доминируют, но аккуратно подмешиваются товары с ценой, рейтинги, советы, статьи, категории, услуги.
 
 ВАЖНО: Проект на стадии сбора требований. Ничего не реализовано. Не упоминай сроки, этапы или статусы. Узнай, как команда хочет, чтобы это работало.
+
+СОБЕСЕДНИК: Зовут ${name}, статус — ${status}. Обращайся к собеседнику по имени в разговоре.
 
 РОЛЬ СОБЕСЕДНИКА: ${ROLE_CTX[role]}
 
@@ -127,8 +137,8 @@ function sysPrompt(role) {
 - OPTIONS всегда последняя строка сообщения, после неё ничего нет`;
 }
 
-const summaryPrompt = (role) => `Сформируй структурированный конспект требований на основе интервью.
-Роль: ${ROLE_NAMES[role]}. Дата: ${new Date().toLocaleDateString('ru-RU')}.
+const summaryPrompt = (role, name, status) => `Сформируй структурированный конспект требований на основе интервью.
+Роль: ${ROLE_NAMES[role]}. Имя: ${name}. Статус: ${status}. Дата: ${new Date().toLocaleDateString('ru-RU')}.
 
 Структура — строго по блокам (используй ### для заголовков):
 ### БЛОК 1: ЭКРАНЫ
@@ -142,8 +152,10 @@ const summaryPrompt = (role) => `Сформируй структурирован
 Пиши конкретно. Если тема раскрыта частично — отметь. Без маркдауна кроме заголовков ###.`;
 
 export default function Home() {
-  const [screen, setScreen] = useState('start'); // start | chat | result
+  const [screen, setScreen] = useState('intro'); // intro | start | chat | result
   const [role, setRole] = useState('pm');
+  const [userName, setUserName] = useState('');
+  const [userStatus, setUserStatus] = useState(STATUS_LIST[0]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -177,8 +189,8 @@ export default function Home() {
     setTopicIdx(0);
     histRef.current = [];
     setBusy(true);
-    const initMsg = `Начни интервью: поприветствуй собеседника, назови его роль (${ROLE_NAMES[role]}), объясни что собираем требования к ленте вдохновения по 5 темам, и задай первый вопрос по теме «Экраны».`;
-    const { reply, newHist } = await callClaude(initMsg, [], sysPrompt(role));
+    const initMsg = `Начни интервью: поприветствуй ${userName} по имени, назови его роль (${ROLE_NAMES[role]}), объясни что собираем требования к ленте вдохновения по 5 темам, и задай первый вопрос по теме «Экраны».`;
+    const { reply, newHist } = await callClaude(initMsg, [], sysPrompt(role, userName, userStatus));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(1);
     const optMatch0 = reply.match(/OPTIONS:\[(.+?)\]/);
@@ -194,7 +206,7 @@ export default function Home() {
     setInput('');
     setMessages(m => [...m, { role: 'user', text }]);
     setBusy(true);
-    const { reply, newHist } = await callClaude(text, histRef.current, sysPrompt(role));
+    const { reply, newHist } = await callClaude(text, histRef.current, sysPrompt(role, userName, userStatus));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.trim() === 'ГОТОВО' || reply.includes('ГОТОВО')) {
       setBusy(false);
@@ -202,7 +214,6 @@ export default function Home() {
       return;
     }
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    // Parse OPTIONS from reply
     const optMatch = reply.match(/OPTIONS:\[(.+?)\]/);
     if (optMatch) {
       setChips(optMatch[1].split('|').map(s => s.trim()));
@@ -216,16 +227,15 @@ export default function Home() {
 
   async function finishInterview() {
     setMessages(m => [...m, { role: 'agent', text: 'Все темы разобраны. Формирую конспект...' }]);
-    const { reply } = await callClaude(summaryPrompt(role), histRef.current, sysPrompt(role));
+    const { reply } = await callClaude(summaryPrompt(role, userName, userStatus), histRef.current, sysPrompt(role, userName, userStatus));
     setSummary(reply);
     setTopicIdx(TOPICS.length);
     setScreen('result');
-    // Save to Google Sheets
     try {
       await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: ROLE_NAMES[role], summary: reply, date: new Date().toLocaleDateString('ru-RU') }),
+        body: JSON.stringify({ role: ROLE_NAMES[role], name: userName, status: userStatus, summary: reply, date: new Date().toLocaleDateString('ru-RU') }),
       });
       setSaved(true);
     } catch (e) { console.error(e); }
@@ -235,7 +245,78 @@ export default function Home() {
 
   function copyResult() { navigator.clipboard.writeText(summary); }
 
-  function reset() { setScreen('start'); setMessages([]); setSummary(''); setSaved(false); setTopicIdx(0); histRef.current = []; }
+  function reset() { setScreen('intro'); setMessages([]); setSummary(''); setSaved(false); setTopicIdx(0); histRef.current = []; }
+
+  if (screen === 'intro') {
+    return (
+      <>
+        <Head>
+          <title>Сбор требований · Бесконечная лента · Lemana PRO</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+          <style>{`
+            *{box-sizing:border-box;margin:0;padding:0}
+            :root{--y:#F5C800;--yd:#C49B00;--yl:#FFF8CC;--bg:#f5f4f0;--bg2:#fff;--border:rgba(0,0,0,0.08);--text:#1a1a1a;--text2:#5a5a5a;--text3:#9b9b9b}
+            body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+            header{background:#fff;border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+            .logo{font-family:'Unbounded',sans-serif;font-size:11px;font-weight:700;color:var(--yd);display:flex;align-items:center;gap:6px}
+            .logo-dot{width:6px;height:6px;border-radius:50%;background:var(--y)}
+            .badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--yl);color:var(--yd)}
+            .intro-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:32px}
+            .intro-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:24px}
+            .intro-title{font-family:'Unbounded',sans-serif;font-size:16px;font-weight:700;line-height:1.35;color:var(--text)}
+            .intro-title span{color:var(--y)}
+            .intro-sub{font-size:13px;color:var(--text2);line-height:1.6;margin-top:-12px}
+            .field{display:flex;flex-direction:column;gap:6px}
+            .field label{font-size:12px;font-weight:600;color:var(--text2)}
+            .field input,.field select{width:100%;padding:10px 14px;border-radius:9px;border:1px solid var(--border);font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:#fff;outline:none;transition:.12s;appearance:none;-webkit-appearance:none}
+            .field input:focus,.field select:focus{border-color:var(--yd)}
+            .select-wrap{position:relative}
+            .select-wrap::after{content:'▾';position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none;font-size:12px}
+            .intro-btn{padding:12px 24px;border-radius:9px;background:var(--y);border:none;cursor:pointer;font-family:'Unbounded',sans-serif;font-size:10px;font-weight:700;color:#1a1a1a;transition:.12s;width:100%}
+            .intro-btn:hover:not(:disabled){background:var(--yd);color:#fff}
+            .intro-btn:disabled{opacity:.4;cursor:not-allowed}
+          `}</style>
+        </Head>
+        <header>
+          <div className="logo"><span className="logo-dot" />Lemana PRO</div>
+          <span className="badge">Сбор требований · Бесконечная лента</span>
+        </header>
+        <div className="intro-wrap">
+          <div className="intro-card">
+            <div className="intro-title">Сбор требований<br /><span>ленты вдохновения</span></div>
+            <p className="intro-sub">Агент проведёт структурированное интервью по 5 темам и сформирует конспект для BRD.</p>
+            <div className="field">
+              <label>Ваше имя</label>
+              <input
+                type="text"
+                placeholder="Введите имя..."
+                value={userName}
+                onChange={e => setUserName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="field">
+              <label>Ваш статус</label>
+              <div className="select-wrap">
+                <select value={userStatus} onChange={e => setUserStatus(e.target.value)}>
+                  {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <button
+              className="intro-btn"
+              disabled={!userName.trim()}
+              onClick={() => setScreen('start')}
+            >
+              Начать →
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -292,7 +373,7 @@ export default function Home() {
           .td{width:5px;height:5px;border-radius:50%;background:var(--yd);animation:b .8s infinite}
           .td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
           @keyframes b{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-4px)}}
-          
+
           .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 20px 0}
           .chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#fff;font-size:11px;color:var(--text2);cursor:pointer;transition:.12s;font-family:'Inter',sans-serif;white-space:nowrap}
           .chip:hover{border-color:var(--yd);color:var(--yd);background:var(--yl)}
@@ -319,6 +400,8 @@ export default function Home() {
           .block-title{font-family:'Unbounded',sans-serif;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--yd);margin:16px 0 6px;padding-top:14px;border-top:1px dashed var(--border);display:block}
           .block-title:first-child{border-top:none;margin-top:0;padding-top:0}
           .result-meta{font-size:11px;color:var(--text3);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+          .sidebar-user{padding:10px 14px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);background:var(--yl)}
+          .sidebar-user strong{color:var(--yd);font-weight:600}
         `}</style>
       </Head>
       <header>
@@ -327,6 +410,7 @@ export default function Home() {
       </header>
       <div className="layout">
         <div className="sidebar">
+          <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
           <div className="sidebar-hd">Ваша роль</div>
           {ROLES.map(r => (
             <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => setRole(r.id)}>
@@ -405,7 +489,7 @@ export default function Home() {
                 <div className="result-content">
                   <div className="result-meta">
                     Проект: Бесконечная лента · Lemana PRO{'\n'}
-                    Роль: {ROLE_NAMES[role]}{'\n'}
+                    Роль: {ROLE_NAMES[role]} · {userName} ({userStatus}){'\n'}
                     Дата: {new Date().toLocaleDateString('ru-RU')}
                   </div>
                   {summary.split('\n').map((line, i) => {
