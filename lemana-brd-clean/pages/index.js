@@ -183,6 +183,14 @@ export default function Home() {
     return { reply: data.content?.[0]?.text || '', newHist };
   }
 
+  function parseReply(reply) {
+    // Handles OPTIONS:[a|b|c], OPTIONS: a|b|c, with or without brackets, with optional trailing whitespace
+    const match = reply.match(/OPTIONS:\[?([^\]\n]+)\]?\s*$/m);
+    const chips = match ? match[1].split('|').map(s => s.trim()).filter(Boolean) : [];
+    const text = reply.replace(/\n?OPTIONS:[\s\[]?[^\]\n]+\]?\s*$/m, '').trim();
+    return { text, chips };
+  }
+
   async function startInterview() {
     setScreen('chat');
     setMessages([]);
@@ -193,9 +201,8 @@ export default function Home() {
     const { reply, newHist } = await callClaude(initMsg, [], sysPrompt(role, userName, userStatus));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(1);
-    const optMatch0 = reply.match(/OPTIONS:\[(.+?)\]/);
-    if (optMatch0) setChips(optMatch0[1].split('|').map(s => s.trim()));
-    const cleanReply0 = reply.replace(/\nOPTIONS:\[.+?\]/, '').replace(/OPTIONS:\[.+?\]/, '').trim();
+    const { text: cleanReply0, chips: chips0 } = parseReply(reply);
+    setChips(chips0);
     setMessages([{ role: 'agent', text: cleanReply0 }]);
     setBusy(false);
   }
@@ -214,13 +221,8 @@ export default function Home() {
       return;
     }
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    const optMatch = reply.match(/OPTIONS:\[(.+?)\]/);
-    if (optMatch) {
-      setChips(optMatch[1].split('|').map(s => s.trim()));
-    } else {
-      setChips([]);
-    }
-    const cleanReply = reply.replace(/\nOPTIONS:\[.+?\]/, '').replace(/OPTIONS:\[.+?\]/, '').trim();
+    const { text: cleanReply, chips: newChips } = parseReply(reply);
+    setChips(newChips);
     setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
   }
