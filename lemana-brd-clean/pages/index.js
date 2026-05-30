@@ -116,7 +116,10 @@ function sysPrompt(role) {
 - После закрытия темы скажи точно: "Тему разобрали. Переходим к следующей."
 - После всех 5 тем напиши только: ГОТОВО
 - Русский язык, тон профессиональный но живой
-- Без маркдауна (звёздочек, решёток) в сообщениях`;
+- Без маркдауна (звёздочек, решёток) в сообщениях
+- В КОНЦЕ КАЖДОГО своего сообщения добавляй варианты ответа в формате: OPTIONS:[вариант 1|вариант 2|вариант 3|вариант 4|вариант 5]
+- Варианты должны быть конкретными и релевантными именно к заданному вопросу (3-6 вариантов)
+- OPTIONS всегда последняя строка сообщения, после неё ничего нет`;
 }
 
 const summaryPrompt = (role) => `Сформируй структурированный конспект требований на основе интервью.
@@ -141,6 +144,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [topicIdx, setTopicIdx] = useState(0);
   const [summary, setSummary] = useState('');
+  const [chips, setChips] = useState([]);
   const [saved, setSaved] = useState(false);
   const histRef = useRef([]);
   const msgsEndRef = useRef(null);
@@ -172,7 +176,10 @@ export default function Home() {
     const { reply, newHist } = await callClaude(initMsg, [], sysPrompt(role));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(1);
-    setMessages([{ role: 'agent', text: reply }]);
+    const optMatch0 = reply.match(/OPTIONS:\[(.+?)\]/);
+    if (optMatch0) setChips(optMatch0[1].split('|').map(s => s.trim()));
+    const cleanReply0 = reply.replace(/\nOPTIONS:\[.+?\]/, '').replace(/OPTIONS:\[.+?\]/, '').trim();
+    setMessages([{ role: 'agent', text: cleanReply0 }]);
     setBusy(false);
   }
 
@@ -190,7 +197,15 @@ export default function Home() {
       return;
     }
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    setMessages(m => [...m, { role: 'agent', text: reply }]);
+    // Parse OPTIONS from reply
+    const optMatch = reply.match(/OPTIONS:\[(.+?)\]/);
+    if (optMatch) {
+      setChips(optMatch[1].split('|').map(s => s.trim()));
+    } else {
+      setChips([]);
+    }
+    const cleanReply = reply.replace(/\nOPTIONS:\[.+?\]/, '').replace(/OPTIONS:\[.+?\]/, '').trim();
+    setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
   }
 
@@ -351,7 +366,7 @@ export default function Home() {
               <div ref={msgsEndRef} />
             </div>
             <div className="chips">
-              {(QUICK_REPLIES[TOPICS[Math.min(topicIdx, TOPICS.length-1)]?.id] || []).map((chip, i) => (
+              {chips.map((chip, i) => (
                 <button key={i} className={`chip${input.includes(chip) ? ' selected' : ''}`}
                   onClick={() => setInput(prev => {
                     if (prev.includes(chip)) return prev.replace(', ' + chip, '').replace(chip + ', ', '').replace(chip, '').trim();
