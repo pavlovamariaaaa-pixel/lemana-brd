@@ -4,26 +4,41 @@ export default async function handler(req, res) {
   const { date, role, name, status, summary } = req.body;
 
   try {
-    const SHEET_ID = '36f16e34d7c280758cabd85aa6e6854c';
-    const SHEET_NAME = 'Результаты';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const safeName = (name || 'unknown').replace(/[^a-zA-Zа-яА-Я0-9_-]/g, '_');
+    const path = `results/${timestamp}-${safeName}.md`;
+
+    const content = `# Конспект интервью · Бесконечная лента · Lemana PRO
+
+**Дата:** ${date}
+**Роль:** ${role}
+**Имя:** ${name}
+**Статус:** ${status}
+
+---
+
+${summary}
+`;
 
     const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      `https://api.github.com/repos/pavlovamariaaaa-pixel/lemana-brd/contents/${path}`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: {
-          Authorization: `Bearer ${process.env.GOOGLE_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
           'Content-Type': 'application/json',
+          Accept: 'application/vnd.github+json',
         },
         body: JSON.stringify({
-          values: [[date, role, name, status, summary]],
+          message: `result: ${name} (${role}) · ${date}`,
+          content: Buffer.from(content).toString('base64'),
         }),
       }
     );
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'Sheets API error');
-    res.status(200).json({ ok: true });
+    if (!response.ok) throw new Error(data.message || 'GitHub API error');
+    res.status(200).json({ ok: true, url: data.content?.html_url });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
