@@ -19,6 +19,8 @@ const ROLES = [
 
 const ROLE_NAMES = { pm: 'Product Manager', content: 'Content', media: 'Media Production', dev: 'Разработка', head: 'Руководитель' };
 
+const LS_KEY = 'lemana-brd-progress';
+
 const STATUS_LIST = [
   'Бизнес-заказчик',
   'Продукт / PM',
@@ -163,10 +165,38 @@ export default function Home() {
   const [summary, setSummary] = useState('');
   const [chips, setChips] = useState([]);
   const [saved, setSaved] = useState(false);
+  const [resumeData, setResumeData] = useState(null);
   const histRef = useRef([]);
   const msgsEndRef = useRef(null);
 
   useEffect(() => { msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Check localStorage on mount for unfinished session
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (!data.completedAt) setResumeData(data);
+      }
+    } catch (e) {}
+  }, []);
+
+  // Auto-save progress after each message update
+  useEffect(() => {
+    if (screen !== 'chat' || messages.length === 0 || !userName) return;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        name: userName,
+        role,
+        userStatus,
+        messages,
+        hist: histRef.current,
+        topicIdx,
+        timestamp: Date.now(),
+      }));
+    } catch (e) {}
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function callClaude(userMsg, hist, sys) {
     const newHist = [...hist, { role: 'user', content: userMsg }];
@@ -207,6 +237,35 @@ export default function Home() {
     setBusy(false);
   }
 
+  async function continueInterview() {
+    const data = resumeData;
+    setResumeData(null);
+    setUserName(data.name);
+    setRole(data.role);
+    if (data.userStatus) setUserStatus(data.userStatus);
+    histRef.current = data.hist || [];
+    setTopicIdx(data.topicIdx || 0);
+    setMessages(data.messages || []);
+    setScreen('chat');
+    setBusy(true);
+    const histStr = (data.messages || [])
+      .map(m => `${m.role === 'user' ? 'Пользователь' : 'Агент'}: ${m.text}`)
+      .join('\n');
+    const contMsg = `Пользователь вернулся. Продолжи интервью с того места где остановились. Вот история:\n${histStr}`;
+    const { reply, newHist } = await callClaude(contMsg, data.hist || [], sysPrompt(data.role, data.name, data.userStatus || STATUS_LIST[0]));
+    histRef.current = [...newHist, { role: 'assistant', content: reply }];
+    if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
+    const { text: cleanReply, chips: newChips } = parseReply(reply);
+    setChips(newChips);
+    setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
+    setBusy(false);
+  }
+
+  function dismissResume() {
+    localStorage.removeItem(LS_KEY);
+    setResumeData(null);
+  }
+
   async function send() {
     if (!input.trim() || busy) return;
     const text = input.trim();
@@ -240,6 +299,11 @@ export default function Home() {
         body: JSON.stringify({ role: ROLE_NAMES[role], name: userName, status: userStatus, summary: reply, date: new Date().toLocaleDateString('ru-RU'), transcript: histRef.current }),
       });
       setSaved(true);
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        const existing = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(LS_KEY, JSON.stringify({ ...existing, completedAt: Date.now() }));
+      } catch (e) {}
     } catch (e) { console.error(e); }
   }
 
@@ -247,7 +311,30 @@ export default function Home() {
 
   function copyResult() { navigator.clipboard.writeText(summary); }
 
-  function reset() { setScreen('intro'); setMessages([]); setSummary(''); setSaved(false); setTopicIdx(0); histRef.current = []; }
+  function reset() {
+    localStorage.removeItem(LS_KEY);
+    setScreen('intro'); setMessages([]); setSummary(''); setSaved(false); setTopicIdx(0); histRef.current = [];
+  }
+
+  const resumeBanner = resumeData && (
+    <div style={{background:'#FFF8CC',borderBottom:'2px solid #F5C800',padding:'10px 20px',display:'flex',alignItems:'center',gap:12,fontSize:13,flexShrink:0}}>
+      <span style={{flex:1,color:'#1a1a1a'}}>
+        Вы прервали интервью (<strong>{resumeData.name}</strong>). Продолжить с того места?
+      </span>
+      <button
+        onClick={continueInterview}
+        style={{padding:'6px 14px',borderRadius:7,background:'#F5C800',border:'none',cursor:'pointer',fontWeight:600,fontSize:12,fontFamily:'Inter,sans-serif'}}
+      >
+        Продолжить
+      </button>
+      <button
+        onClick={dismissResume}
+        style={{padding:'6px 14px',borderRadius:7,background:'none',border:'1px solid rgba(0,0,0,0.12)',cursor:'pointer',fontSize:12,color:'#5a5a5a',fontFamily:'Inter,sans-serif'}}
+      >
+        Начать заново
+      </button>
+    </div>
+  );
 
   if (screen === 'intro') {
     return (
@@ -285,6 +372,7 @@ export default function Home() {
           <div className="logo"><span className="logo-dot" />Lemana PRO</div>
           <span className="badge">Сбор требований · Бесконечная лента</span>
         </header>
+        {resumeBanner}
         <div className="intro-wrap">
           <div className="intro-card">
             <div className="intro-title">Сбор требований<br /><span>ленты вдохновения</span></div>
@@ -410,6 +498,7 @@ export default function Home() {
         <div className="logo"><span className="logo-dot" />Lemana PRO</div>
         <span className="badge">Сбор требований · Бесконечная лента</span>
       </header>
+      {resumeBanner}
       <div className="layout">
         <div className="sidebar">
           <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
