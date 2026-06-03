@@ -247,6 +247,7 @@ export default function Home() {
     setInput('');
     setMessages(m => [...m, { role: 'user', text }]);
     setBusy(true);
+    saveDraft(null, [...messages, { role: 'user', text }]);
     const { reply, newHist } = await callClaude(text, histRef.current, sysPrompt(role, userName, userStatus));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.trim() === 'ГОТОВО' || reply.includes('ГОТОВО')) {
