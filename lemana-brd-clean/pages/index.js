@@ -123,6 +123,7 @@ function sysPrompt(role, name, status) {
 
 ПРАВИЛА:
 - В НАЧАЛЕ каждого своего сообщения выводи первой строкой: PROGRESS:X/8 где X — текущий шаг (1=роль определена, 2=блок DAM, 3=блок логика выдачи, 4=блок типы контента, 5=блок правила показа, 6=блок точки входа, 7=блок персонализация, 8=конспект готов). PROGRESS всегда самая первая строка, до любого другого текста.
+- Когда завершаешь тематический блок, добавляй второй строкой (сразу после PROGRESS): CHECKPOINT:[название блока] где название — одно из: DAM, логика выдачи, типы контента, правила показа, точки входа, персонализация. CHECKPOINT выводи только при завершении блока.
 - Один вопрос за раз, жди ответа
 - После ответа: кратко резюмируй (1-2 предложения), потом следующий вопрос
 - Уточняй если ответ поверхностный
@@ -216,14 +217,18 @@ export default function Home() {
   }
 
   function parseReply(reply) {
-    const progressMatch = reply.match(/^PROGRESS:(\d+)\/8\r?\n?/);
+    let remaining = reply;
+    const progressMatch = remaining.match(/^PROGRESS:(\d+)\/8\r?\n?/);
     const prog = progressMatch ? parseInt(progressMatch[1], 10) : null;
-    const withoutProg = progressMatch ? reply.slice(progressMatch[0].length) : reply;
+    if (progressMatch) remaining = remaining.slice(progressMatch[0].length);
+    const checkpointMatch = remaining.match(/^CHECKPOINT:([^\n]+)\r?\n?/);
+    const checkpoint = checkpointMatch ? checkpointMatch[1].trim() : null;
+    if (checkpointMatch) remaining = remaining.slice(checkpointMatch[0].length);
     // Handles OPTIONS:[a|b|c], OPTIONS: a|b|c, with or without brackets, with optional trailing whitespace
-    const match = withoutProg.match(/OPTIONS:\[?([^\]\n]+)\]?\s*$/m);
+    const match = remaining.match(/OPTIONS:\[?([^\]\n]+)\]?\s*$/m);
     const chips = match ? match[1].split('|').map(s => s.trim()).filter(Boolean) : [];
-    const text = withoutProg.replace(/\n?OPTIONS:[\s\[]?[^\]\n]+\]?\s*$/m, '').trim();
-    return { text, chips, prog };
+    const text = remaining.replace(/\n?OPTIONS:[\s\[]?[^\]\n]+\]?\s*$/m, '').trim();
+    return { text, chips, prog, checkpoint };
   }
 
   async function startInterview() {
@@ -261,8 +266,9 @@ export default function Home() {
     const { reply, newHist } = await callClaude(contMsg, data.hist || [], sysPrompt(data.role, data.name, data.userStatus || STATUS_LIST[0]));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    const { text: cleanReply, chips: newChips, prog } = parseReply(reply);
-    if (prog) setProgress(prog);
+    const { text: cleanReply, chips: newChips, prog: contProg, checkpoint: contCheckpoint } = parseReply(reply);
+    if (contProg) setProgress(contProg);
+    if (contCheckpoint) saveDraft(contCheckpoint, [...(data.messages || []), { role: 'agent', text: cleanReply }]);
     setChips(newChips);
     setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
@@ -271,6 +277,20 @@ export default function Home() {
   function dismissResume() {
     localStorage.removeItem(LS_KEY);
     setResumeData(null);
+  }
+
+  function saveDraft(checkpoint, msgs) {
+    fetch('/api/save-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: userName,
+        role: ROLE_NAMES[role],
+        checkpoint,
+        messages: msgs,
+        date: new Date().toLocaleDateString('ru-RU'),
+      }),
+    }).catch(e => console.error('Draft save error:', e));
   }
 
   async function send() {
@@ -287,8 +307,9 @@ export default function Home() {
       return;
     }
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    const { text: cleanReply, chips: newChips, prog } = parseReply(reply);
+    const { text: cleanReply, chips: newChips, prog, checkpoint } = parseReply(reply);
     if (prog) setProgress(prog);
+    if (checkpoint) saveDraft(checkpoint, [...messages, { role: 'user', text }, { role: 'agent', text: cleanReply }]);
     setChips(newChips);
     setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
