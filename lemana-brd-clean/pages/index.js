@@ -342,10 +342,28 @@ export default function Home() {
 
   function reset() {
     localStorage.removeItem(LS_KEY);
-    setScreen('intro'); setMessages([]); setSummary(''); setSaved(false); setTopicIdx(0); histRef.current = [];
+    setResumeData(null);
+    setUserName('');
+    setRole('pm');
+    setUserStatus(STATUS_LIST[0]);
+    setMessages([]);
+    setSummary('');
+    setSaved(false);
+    setTopicIdx(0);
+    setProgress(0);
+    setChips([]);
+    histRef.current = [];
+    setScreen('intro');
   }
 
-  const resumeBanner = resumeData && (
+  // Show banner only when name+role match the saved session (or on intro before name is entered)
+  const bannerShouldShow = resumeData && (
+    screen === 'intro'
+      ? (!userName || userName === resumeData.name)
+      : (userName === resumeData.name && role === resumeData.role)
+  );
+
+  const resumeBanner = bannerShouldShow && (
     <div style={{background:'#FFF8CC',borderBottom:'2px solid #F5C800',padding:'10px 20px',display:'flex',alignItems:'center',gap:12,fontSize:13,flexShrink:0}}>
       <span style={{flex:1,color:'#1a1a1a'}}>
         Вы прервали интервью (<strong>{resumeData.name}</strong>). Продолжить с того места?
@@ -412,7 +430,13 @@ export default function Home() {
                 type="text"
                 placeholder="Введите имя..."
                 value={userName}
-                onChange={e => setUserName(e.target.value)}
+                onChange={e => {
+                  setUserName(e.target.value);
+                  if (resumeData && e.target.value && e.target.value !== resumeData.name) {
+                    localStorage.removeItem(LS_KEY);
+                    setResumeData(null);
+                  }
+                }}
                 autoFocus
               />
             </div>
@@ -538,7 +562,14 @@ export default function Home() {
           <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
           <div className="sidebar-hd">Ваша роль</div>
           {ROLES.map(r => (
-            <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => setRole(r.id)}>
+            <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => {
+              if (screen === 'chat') { reset(); return; }
+              setRole(r.id);
+              if (resumeData && r.id !== resumeData.role) {
+                localStorage.removeItem(LS_KEY);
+                setResumeData(null);
+              }
+            }}>
               <div className="role-name">{r.name}</div>
               <div className="role-desc">{r.desc}</div>
             </button>
@@ -564,8 +595,15 @@ export default function Home() {
             <div className="start">
               <h1>Сбор требований<br /><span>ленты вдохновения</span></h1>
               <p>Агент проведёт структурированное интервью по 5 темам и сформирует конспект для BRD.</p>
-              <div className="hint-box">
-                Интервью займёт 10–15 минут. Ответьте на все вопросы — ваши ответы сохранятся автоматически. Не закрывайте вкладку до появления конспекта.
+              <div className="hint-box" style={{textAlign:'left'}}>
+                <strong style={{display:'block',marginBottom:6}}>Как проходить интервью:</strong>
+                <ol style={{paddingLeft:16,display:'flex',flexDirection:'column',gap:4}}>
+                  <li>Введите имя и выберите роль</li>
+                  <li>Отвечайте на вопросы агента в свободной форме</li>
+                  <li>Каждый ваш ответ автоматически сохраняется — можно закрыть вкладку и вернуться позже</li>
+                  <li>Если вернётесь — нажмите «Продолжить» и интервью продолжится с того места</li>
+                  <li>В конце появится конспект — это значит всё готово</li>
+                </ol>
               </div>
               <div className="start-note">Выберите роль слева, затем начните интервью</div>
               <button className="start-btn" onClick={startInterview}>Начать интервью →</button>
