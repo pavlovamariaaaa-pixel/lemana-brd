@@ -122,6 +122,7 @@ function sysPrompt(role, name, status) {
 5. УПРАВЛЕНИЕ НА БЭКЕ — интеграции (DAM, CDP, прайсинг, отзывы), кто настраивает правила
 
 ПРАВИЛА:
+- В НАЧАЛЕ каждого своего сообщения выводи первой строкой: PROGRESS:X/8 где X — текущий шаг (1=роль определена, 2=блок DAM, 3=блок логика выдачи, 4=блок типы контента, 5=блок правила показа, 6=блок точки входа, 7=блок персонализация, 8=конспект готов). PROGRESS всегда самая первая строка, до любого другого текста.
 - Один вопрос за раз, жди ответа
 - После ответа: кратко резюмируй (1-2 предложения), потом следующий вопрос
 - Уточняй если ответ поверхностный
@@ -166,6 +167,7 @@ export default function Home() {
   const [chips, setChips] = useState([]);
   const [saved, setSaved] = useState(false);
   const [resumeData, setResumeData] = useState(null);
+  const [progress, setProgress] = useState(0);
   const histRef = useRef([]);
   const msgsEndRef = useRef(null);
 
@@ -214,11 +216,14 @@ export default function Home() {
   }
 
   function parseReply(reply) {
+    const progressMatch = reply.match(/^PROGRESS:(\d+)\/8\r?\n?/);
+    const prog = progressMatch ? parseInt(progressMatch[1], 10) : null;
+    const withoutProg = progressMatch ? reply.slice(progressMatch[0].length) : reply;
     // Handles OPTIONS:[a|b|c], OPTIONS: a|b|c, with or without brackets, with optional trailing whitespace
-    const match = reply.match(/OPTIONS:\[?([^\]\n]+)\]?\s*$/m);
+    const match = withoutProg.match(/OPTIONS:\[?([^\]\n]+)\]?\s*$/m);
     const chips = match ? match[1].split('|').map(s => s.trim()).filter(Boolean) : [];
-    const text = reply.replace(/\n?OPTIONS:[\s\[]?[^\]\n]+\]?\s*$/m, '').trim();
-    return { text, chips };
+    const text = withoutProg.replace(/\n?OPTIONS:[\s\[]?[^\]\n]+\]?\s*$/m, '').trim();
+    return { text, chips, prog };
   }
 
   async function startInterview() {
@@ -231,7 +236,8 @@ export default function Home() {
     const { reply, newHist } = await callClaude(initMsg, [], sysPrompt(role, userName, userStatus));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(1);
-    const { text: cleanReply0, chips: chips0 } = parseReply(reply);
+    const { text: cleanReply0, chips: chips0, prog: prog0 } = parseReply(reply);
+    if (prog0) setProgress(prog0);
     setChips(chips0);
     setMessages([{ role: 'agent', text: cleanReply0 }]);
     setBusy(false);
@@ -255,7 +261,8 @@ export default function Home() {
     const { reply, newHist } = await callClaude(contMsg, data.hist || [], sysPrompt(data.role, data.name, data.userStatus || STATUS_LIST[0]));
     histRef.current = [...newHist, { role: 'assistant', content: reply }];
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    const { text: cleanReply, chips: newChips } = parseReply(reply);
+    const { text: cleanReply, chips: newChips, prog } = parseReply(reply);
+    if (prog) setProgress(prog);
     setChips(newChips);
     setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
@@ -280,7 +287,8 @@ export default function Home() {
       return;
     }
     if (reply.includes('Тему разобрали')) setTopicIdx(i => Math.min(i + 1, TOPICS.length - 1));
-    const { text: cleanReply, chips: newChips } = parseReply(reply);
+    const { text: cleanReply, chips: newChips, prog } = parseReply(reply);
+    if (prog) setProgress(prog);
     setChips(newChips);
     setMessages(m => [...m, { role: 'agent', text: cleanReply }]);
     setBusy(false);
@@ -492,6 +500,11 @@ export default function Home() {
           .result-meta{font-size:11px;color:var(--text3);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
           .sidebar-user{padding:10px 14px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);background:var(--yl)}
           .sidebar-user strong{color:var(--yd);font-weight:600}
+          .progress-bar-wrap{padding:10px 20px 0;flex-shrink:0;background:#fff;border-bottom:1px solid var(--border)}
+          .progress-bar-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+          .progress-bar-fill{height:100%;background:var(--y);border-radius:2px;transition:width .4s ease}
+          .progress-bar-label{font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between}
+          .hint-box{background:var(--yl);border:1px solid rgba(196,155,0,.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--yd);line-height:1.55;max-width:420px;text-align:center}
         `}</style>
       </Head>
       <header>
@@ -530,11 +543,25 @@ export default function Home() {
             <div className="start">
               <h1>Сбор требований<br /><span>ленты вдохновения</span></h1>
               <p>Агент проведёт структурированное интервью по 5 темам и сформирует конспект для BRD.</p>
+              <div className="hint-box">
+                Интервью займёт 10–15 минут. Ответьте на все вопросы — ваши ответы сохранятся автоматически. Не закрывайте вкладку до появления конспекта.
+              </div>
               <div className="start-note">Выберите роль слева, затем начните интервью</div>
               <button className="start-btn" onClick={startInterview}>Начать интервью →</button>
             </div>
           )}
           {screen === 'chat' && <>
+            {progress > 0 && (
+              <div className="progress-bar-wrap">
+                <div className="progress-bar-label">
+                  <span>Шаг {progress} из 8</span>
+                  <span>{Math.round((progress / 8) * 100)}%</span>
+                </div>
+                <div className="progress-bar-track">
+                  <div className="progress-bar-fill" style={{width:`${(progress / 8) * 100}%`}} />
+                </div>
+              </div>
+            )}
             <div className="msgs">
               {messages.map((m, i) => (
                 <div key={i} className={`msg ${m.role}`}>
