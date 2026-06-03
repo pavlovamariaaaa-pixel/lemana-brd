@@ -19,7 +19,9 @@ const ROLES = [
 
 const ROLE_NAMES = { pm: 'Product Manager', content: 'Content', media: 'Media Production', dev: 'Разработка', head: 'Руководитель' };
 
-const LS_KEY = 'lemana-brd-progress';
+const LS_KEY     = 'lemana-brd-progress';
+const LS_USER    = 'lemana-user';
+const LS_HISTORY = 'lemana-brd-history';
 
 const STATUS_LIST = [
   'Бизнес-заказчик',
@@ -36,71 +38,6 @@ const ROLE_CTX = {
   media:   'Собеседник — специалист по Media Production или DAM. Фокус: как устроена работа с DAM, что уже размечено и по каким атрибутам, что нужно дополнительно разметить для ленты, насколько материалы технически готовы.',
   dev:     'Собеседник — разработчик или технический архитектор. Фокус: откуда берём данные (цена, рейтинг, отзывы, товары), какие системы интегрируем (DAM, CDP, прайсинг), текущие технические ограничения.',
   head:    'Собеседник — руководитель. Фокус: стратегические приоритеты ленты, какие бизнес-цели она решает, ограничения по ресурсам, видимые риски, критерий успеха.',
-};
-
-const QUICK_REPLIES = {
-  screens: [
-    'Главная страница (веб)',
-    'Главная (мобайл)',
-    'PDP — карточка товара',
-    'PLP — страница категории',
-    'Корзина',
-    'Поиск / SRP',
-    'Избранное',
-    'Пустая корзина',
-    'Страница услуги',
-    'Thank you page',
-    'Личный кабинет',
-    'Пустая выдача поиска',
-    'Проектные лендинги',
-  ],
-  client: [
-    'Авторизованный с историей покупок (знаем профиль из CDP)',
-    'Авторизованный без истории (новый)',
-    'Анонимный пользователь',
-    'B2B / профессионал',
-    'Персонализация по ценовому сегменту',
-    'Персонализация по интересам (ремонт, декор, сад…)',
-    'Персонализация по истории просмотров',
-    'Все сегменты — разная глубина персонализации',
-  ],
-  funnel: [
-    'Прямой заход — знает Lemana, высокое намерение',
-    'Из органического поиска по запросу',
-    'Из ремаркетинга — уже был на сайте',
-    'Из соцсетей / вдохновения — намерение не сформировано',
-    'Сохранённое намерение — возвращается к прерванному',
-    'Стадия выбора — сравнивает варианты',
-    'Стадия покупки — готов купить',
-    'Постпокупочный визит',
-  ],
-  content: [
-    'Lifestyle-фото — основа ленты (60%+)',
-    'Товары с ценой и CTA',
-    'Товары с рейтингом и отзывами',
-    'Советы и инструкции',
-    'Статьи и гайды',
-    'Категории товаров',
-    'Услуги Lemana',
-    'Готовые решения / проекты',
-    'Акции и спецпредложения',
-    'Баннеры маркетинговых активностей',
-    'Сезонные подборки',
-    'Отзывы покупателей',
-  ],
-  backend: [
-    'DAM — источник lifestyle-контента',
-    'CDP — профиль и сегменты клиента',
-    'Прайсинг-сервис — цены в реальном времени',
-    'Платформа отзывов и рейтингов',
-    'Сервис персонализации (уже есть)',
-    'Товарные рекомендации',
-    'Маркетинговая платформа — акции и промо',
-    'Правила показа настраивает маркетинг (без кода)',
-    'Правила показа настраивает разработка',
-    'ML-ранжирование на основе поведения',
-    'A/B тестирование вариантов ленты',
-  ],
 };
 
 function sysPrompt(role, name, status) {
@@ -169,14 +106,24 @@ export default function Home() {
   const [saved, setSaved] = useState(false);
   const [resumeData, setResumeData] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [savedUserName, setSavedUserName] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
   const histRef = useRef([]);
   const msgsEndRef = useRef(null);
 
   useEffect(() => { msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Check localStorage on mount for unfinished session
+  // Load persisted user identity, history, and unfinished session on mount
   useEffect(() => {
     try {
+      const rawUser = localStorage.getItem(LS_USER);
+      if (rawUser) {
+        const { name } = JSON.parse(rawUser);
+        if (name) { setSavedUserName(name); setUserName(name); }
+      }
+      const rawHistory = localStorage.getItem(LS_HISTORY);
+      if (rawHistory) setHistoryData(JSON.parse(rawHistory));
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
         const data = JSON.parse(raw);
@@ -190,13 +137,8 @@ export default function Home() {
     if (screen !== 'chat' || messages.length === 0 || !userName) return;
     try {
       localStorage.setItem(LS_KEY, JSON.stringify({
-        name: userName,
-        role,
-        userStatus,
-        messages,
-        hist: histRef.current,
-        topicIdx,
-        timestamp: Date.now(),
+        name: userName, role, userStatus, messages,
+        hist: histRef.current, topicIdx, timestamp: Date.now(),
       }));
     } catch (e) {}
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -279,6 +221,12 @@ export default function Home() {
     setResumeData(null);
   }
 
+  function clearSavedUser() {
+    localStorage.removeItem(LS_USER);
+    setSavedUserName('');
+    setUserName('');
+  }
+
   function saveDraft(checkpoint, msgs) {
     fetch('/api/save-draft', {
       method: 'POST',
@@ -328,10 +276,26 @@ export default function Home() {
         body: JSON.stringify({ role: ROLE_NAMES[role], name: userName, status: userStatus, summary: reply, date: new Date().toLocaleDateString('ru-RU'), transcript: histRef.current }),
       });
       setSaved(true);
+      // Mark session as completed in LS_KEY
       try {
         const raw = localStorage.getItem(LS_KEY);
         const existing = raw ? JSON.parse(raw) : {};
         localStorage.setItem(LS_KEY, JSON.stringify({ ...existing, completedAt: Date.now() }));
+      } catch (e) {}
+      // Append to history
+      try {
+        const rawHistory = localStorage.getItem(LS_HISTORY);
+        const history = rawHistory ? JSON.parse(rawHistory) : [];
+        const entry = {
+          date: new Date().toLocaleDateString('ru-RU'),
+          role: ROLE_NAMES[role],
+          name: userName,
+          summary: reply.slice(0, 500),
+          completedAt: Date.now(),
+        };
+        history.push(entry);
+        localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+        setHistoryData(history);
       } catch (e) {}
     } catch (e) { console.error(e); }
   }
@@ -343,7 +307,7 @@ export default function Home() {
   function reset() {
     localStorage.removeItem(LS_KEY);
     setResumeData(null);
-    setUserName('');
+    // Keep userName and savedUserName — identity persists across sessions
     setRole('pm');
     setUserStatus(STATUS_LIST[0]);
     setMessages([]);
@@ -353,10 +317,11 @@ export default function Home() {
     setProgress(0);
     setChips([]);
     histRef.current = [];
-    setScreen('intro');
+    // Skip intro if we already know the user's name
+    setScreen(userName ? 'start' : 'intro');
   }
 
-  // Show banner only when name+role match the saved session (or on intro before name is entered)
+  // Banner: show on intro (name not yet entered or matches), on other screens only if name+role match
   const bannerShouldShow = resumeData && (
     screen === 'intro'
       ? (!userName || userName === resumeData.name)
@@ -368,16 +333,10 @@ export default function Home() {
       <span style={{flex:1,color:'#1a1a1a'}}>
         Вы прервали интервью (<strong>{resumeData.name}</strong>). Продолжить с того места?
       </span>
-      <button
-        onClick={continueInterview}
-        style={{padding:'6px 14px',borderRadius:7,background:'#F5C800',border:'none',cursor:'pointer',fontWeight:600,fontSize:12,fontFamily:'Inter,sans-serif'}}
-      >
+      <button onClick={continueInterview} style={{padding:'6px 14px',borderRadius:7,background:'#F5C800',border:'none',cursor:'pointer',fontWeight:600,fontSize:12,fontFamily:'Inter,sans-serif'}}>
         Продолжить
       </button>
-      <button
-        onClick={dismissResume}
-        style={{padding:'6px 14px',borderRadius:7,background:'none',border:'1px solid rgba(0,0,0,0.12)',cursor:'pointer',fontSize:12,color:'#5a5a5a',fontFamily:'Inter,sans-serif'}}
-      >
+      <button onClick={dismissResume} style={{padding:'6px 14px',borderRadius:7,background:'none',border:'1px solid rgba(0,0,0,0.12)',cursor:'pointer',fontSize:12,color:'#5a5a5a',fontFamily:'Inter,sans-serif'}}>
         Начать заново
       </button>
     </div>
@@ -424,6 +383,12 @@ export default function Home() {
           <div className="intro-card">
             <div className="intro-title">Сбор требований<br /><span>ленты вдохновения</span></div>
             <p className="intro-sub">Агент проведёт структурированное интервью по 5 темам и сформирует конспект для BRD.</p>
+            {savedUserName && (
+              <div style={{background:'var(--yl)',borderRadius:9,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--yd)'}}>Добро пожаловать, {savedUserName}!</span>
+                <button onClick={clearSavedUser} style={{fontSize:11,color:'var(--text3)',background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontFamily:'Inter,sans-serif'}}>Это не я</button>
+              </div>
+            )}
             <div className="field">
               <label>Ваше имя</label>
               <input
@@ -437,7 +402,7 @@ export default function Home() {
                     setResumeData(null);
                   }
                 }}
-                autoFocus
+                autoFocus={!savedUserName}
               />
             </div>
             <div className="field">
@@ -451,7 +416,13 @@ export default function Home() {
             <button
               className="intro-btn"
               disabled={!userName.trim()}
-              onClick={() => setScreen('start')}
+              onClick={() => {
+                try {
+                  localStorage.setItem(LS_USER, JSON.stringify({ name: userName }));
+                  setSavedUserName(userName);
+                } catch (e) {}
+                setScreen('start');
+              }}
             >
               Начать →
             </button>
@@ -516,7 +487,6 @@ export default function Home() {
           .td{width:5px;height:5px;border-radius:50%;background:var(--yd);animation:b .8s infinite}
           .td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
           @keyframes b{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-4px)}}
-
           .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 20px 0}
           .chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#fff;font-size:11px;color:var(--text2);cursor:pointer;transition:.12s;font-family:'Inter',sans-serif;white-space:nowrap}
           .chip:hover{border-color:var(--yd);color:var(--yd);background:var(--yl)}
@@ -545,11 +515,24 @@ export default function Home() {
           .result-meta{font-size:11px;color:var(--text3);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
           .sidebar-user{padding:10px 14px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);background:var(--yl)}
           .sidebar-user strong{color:var(--yd);font-weight:600}
-          .progress-bar-wrap{padding:10px 20px 0;flex-shrink:0;background:#fff;border-bottom:1px solid var(--border)}
+          .progress-bar-wrap{padding:10px 20px 8px;flex-shrink:0;background:#fff;border-bottom:1px solid var(--border)}
           .progress-bar-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
           .progress-bar-fill{height:100%;background:var(--y);border-radius:2px;transition:width .4s ease}
           .progress-bar-label{font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between}
-          .hint-box{background:var(--yl);border:1px solid rgba(196,155,0,.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--yd);line-height:1.55;max-width:420px;text-align:center}
+          .hint-box{background:var(--yl);border:1px solid rgba(196,155,0,.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--yd);line-height:1.55;max-width:420px}
+          .history-link{font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;text-decoration:underline;font-family:'Inter',sans-serif;padding:0}
+          .history-link:hover{color:var(--text)}
+          .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+          .modal{background:#fff;border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:72vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.12)}
+          .modal-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+          .modal-title{font-family:'Unbounded',sans-serif;font-size:11px;font-weight:700;color:var(--text)}
+          .modal-close{background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1;padding:0}
+          .hist-item{border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px}
+          .hist-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+          .hist-meta{display:flex;gap:8px;margin-bottom:4px;align-items:center}
+          .hist-date{font-size:11px;color:var(--text3)}
+          .hist-role{font-size:11px;font-weight:600;color:var(--yd);background:var(--yl);padding:2px 7px;border-radius:10px}
+          .hist-preview{font-size:12px;color:var(--text2);line-height:1.6}
         `}</style>
       </Head>
       <header>
@@ -595,7 +578,7 @@ export default function Home() {
             <div className="start">
               <h1>Сбор требований<br /><span>ленты вдохновения</span></h1>
               <p>Агент проведёт структурированное интервью по 5 темам и сформирует конспект для BRD.</p>
-              <div className="hint-box" style={{textAlign:'left'}}>
+              <div className="hint-box">
                 <strong style={{display:'block',marginBottom:6}}>Как проходить интервью:</strong>
                 <ol style={{paddingLeft:16,display:'flex',flexDirection:'column',gap:4}}>
                   <li>Введите имя и выберите роль</li>
@@ -605,6 +588,11 @@ export default function Home() {
                   <li>В конце появится конспект — это значит всё готово</li>
                 </ol>
               </div>
+              {historyData.length > 0 && (
+                <button className="history-link" onClick={() => setShowHistory(true)}>
+                  Посмотреть мои прошлые ответы ({historyData.length})
+                </button>
+              )}
               <div className="start-note">Выберите роль слева, затем начните интервью</div>
               <button className="start-btn" onClick={startInterview}>Начать интервью →</button>
             </div>
@@ -655,11 +643,11 @@ export default function Home() {
             <div className="result-wrap">
               <div className="result-hd">
                 <h2>Конспект требований готов</h2>
-                <p>Сохранён в Google Sheets · Скопируйте для передачи PM-у</p>
+                <p>Сохранён в GitHub · Скопируйте для передачи PM-у</p>
                 <div className="result-actions">
                   <button className="btn-y" onClick={copyResult}>📋 Скопировать</button>
                   <button className="btn-ghost" onClick={reset}>↩ Новое интервью</button>
-                  {saved && <span className="saved-badge">✓ Сохранено в таблицу</span>}
+                  {saved && <span className="saved-badge">✓ Сохранено</span>}
                 </div>
               </div>
               <div className="result-body">
@@ -679,6 +667,28 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {showHistory && (
+        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-hd">
+              <span className="modal-title">Мои прошлые ответы</span>
+              <button className="modal-close" onClick={() => setShowHistory(false)}>×</button>
+            </div>
+            {[...historyData].reverse().map((s, i) => (
+              <div key={i} className="hist-item">
+                <div className="hist-meta">
+                  <span className="hist-date">{s.date}</span>
+                  <span className="hist-role">{s.role}</span>
+                </div>
+                <p className="hist-preview">
+                  {s.summary.slice(0, 200)}{s.summary.length > 200 ? '…' : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
