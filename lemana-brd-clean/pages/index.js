@@ -516,6 +516,11 @@ export default function Home() {
           .result-meta{font-size:11px;color:var(--text3);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
           .sidebar-user{padding:10px 14px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);background:var(--yl)}
           .sidebar-user strong{color:var(--yd);font-weight:600}
+          .sidebar-identity{padding:14px 14px 12px;border-bottom:1px solid var(--border);background:var(--yl)}
+          .si-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+          .si-role{font-size:11px;color:var(--yd);font-weight:500}
+          .reset-btn{display:block;width:calc(100% - 28px);margin:12px 14px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:12px;color:var(--text2);font-family:'Inter',sans-serif;text-align:center;transition:.12s}
+          .reset-btn:hover{color:var(--text);border-color:rgba(0,0,0,0.18)}
           .progress-bar-wrap{padding:10px 20px 8px;flex-shrink:0;background:#fff;border-bottom:1px solid var(--border)}
           .progress-bar-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
           .progress-bar-fill{height:100%;background:var(--y);border-radius:2px;transition:width .4s ease}
@@ -543,36 +548,43 @@ export default function Home() {
       {resumeBanner}
       <div className="layout">
         <div className="sidebar">
-          <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
-          <div className="sidebar-hd">Ваша роль</div>
-          {ROLES.map(r => (
-            <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => {
-              if (screen === 'chat') { reset(); return; }
-              setRole(r.id);
-              if (resumeData && r.id !== resumeData.role) {
-                localStorage.removeItem(LS_KEY);
-                setResumeData(null);
-              }
-            }}>
-              <div className="role-name">{r.name}</div>
-              <div className="role-desc">{r.desc}</div>
-            </button>
-          ))}
-          <div className="sep" />
           {screen === 'start' ? (
-            <button className="start-btn" style={{margin:'12px 14px',width:'calc(100% - 28px)'}} onClick={startInterview}>Начать →</button>
+            <>
+              <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
+              <div className="sidebar-hd">Ваша роль</div>
+              {ROLES.map(r => (
+                <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => {
+                  setRole(r.id);
+                  if (resumeData && r.id !== resumeData.role) {
+                    localStorage.removeItem(LS_KEY);
+                    setResumeData(null);
+                  }
+                }}>
+                  <div className="role-name">{r.name}</div>
+                  <div className="role-desc">{r.desc}</div>
+                </button>
+              ))}
+              <div className="sep" />
+              <button className="start-btn" style={{margin:'12px 14px',width:'calc(100% - 28px)'}} onClick={startInterview}>Начать →</button>
+            </>
           ) : (
-            <button onClick={reset} style={{margin:'12px 14px',width:'calc(100% - 28px)',padding:'8px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg)',cursor:'pointer',fontSize:'12px',color:'var(--text2)'}}>↩ Начать заново</button>
-          )}
-          {screen !== 'start' && <>
-            <div className="sep" />
-            <div className="prog-hd">Прогресс</div>
-            {TOPICS.map((t, i) => (
-              <div key={t.id} className={`topic${i < topicIdx ? ' done' : i === topicIdx ? ' active' : ''}`}>
-                <div className="tdot" />{t.e} {t.label}
+            <>
+              <div className="sidebar-identity">
+                <div className="si-name">{userName}</div>
+                <div className="si-role">{ROLE_NAMES[role]}</div>
               </div>
-            ))}
-          </>}
+              <button className="reset-btn" onClick={reset}>↩ Начать заново</button>
+              {screen === 'chat' && <>
+                <div className="sep" />
+                <div className="prog-hd">Прогресс</div>
+                {TOPICS.map((t, i) => (
+                  <div key={t.id} className={`topic${i < topicIdx ? ' done' : i === topicIdx ? ' active' : ''}`}>
+                    <div className="tdot" />{t.e} {t.label}
+                  </div>
+                ))}
+              </>}
+            </>
+          )}
         </div>
         <div className="chat">
           {screen === 'start' && (
