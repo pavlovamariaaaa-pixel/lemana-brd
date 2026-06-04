@@ -525,7 +525,14 @@ export default function Home() {
           .progress-bar-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
           .progress-bar-fill{height:100%;background:var(--y);border-radius:2px;transition:width .4s ease}
           .progress-bar-label{font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;justify-content:space-between}
-          .hint-box{background:var(--yl);border:1px solid rgba(196,155,0,.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--yd);line-height:1.55;max-width:420px}
+          .hint-box{background:var(--yl);border:1px solid rgba(196,155,0,.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--yd);line-height:1.55;max-width:480px}
+          .role-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%;max-width:480px}
+          .role-card{padding:10px 12px;border-radius:9px;border:1.5px solid var(--border);background:#fff;cursor:pointer;text-align:left;transition:.12s;width:100%}
+          .role-card:hover{border-color:var(--yd);background:var(--yl)}
+          .role-card.active{border-color:var(--yd);background:var(--yl)}
+          .role-card .role-name{font-size:12px;font-weight:600;color:var(--text)}
+          .role-card .role-desc{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.35}
+          .role-card.active .role-name{color:var(--yd)}
           .history-link{font-size:12px;color:var(--yd);background:none;border:none;cursor:pointer;text-decoration:underline;font-family:'Inter',sans-serif;padding:0}
           .history-link:hover{color:var(--text)}
           .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -548,26 +555,7 @@ export default function Home() {
       {resumeBanner}
       <div className="layout">
         <div className="sidebar">
-          {screen === 'start' ? (
-            <>
-              <div className="sidebar-user"><strong>{userName}</strong> · {userStatus}</div>
-              <div className="sidebar-hd">Ваша роль</div>
-              {ROLES.map(r => (
-                <button key={r.id} className={`role-btn${role === r.id ? ' active' : ''}`} onClick={() => {
-                  setRole(r.id);
-                  if (resumeData && r.id !== resumeData.role) {
-                    localStorage.removeItem(LS_KEY);
-                    setResumeData(null);
-                  }
-                }}>
-                  <div className="role-name">{r.name}</div>
-                  <div className="role-desc">{r.desc}</div>
-                </button>
-              ))}
-              <div className="sep" />
-              <button className="start-btn" style={{margin:'12px 14px',width:'calc(100% - 28px)'}} onClick={startInterview}>Начать →</button>
-            </>
-          ) : (
+          {screen !== 'start' ? (
             <>
               <div className="sidebar-identity">
                 <div className="si-name">{userName}</div>
@@ -601,12 +589,25 @@ export default function Home() {
                   <li>В конце появится конспект — это значит всё готово</li>
                 </ol>
               </div>
+              <div className="role-grid">
+                {ROLES.map(r => (
+                  <button key={r.id} className={`role-card${role === r.id ? ' active' : ''}`} onClick={() => {
+                    setRole(r.id);
+                    if (resumeData && r.id !== resumeData.role) {
+                      localStorage.removeItem(LS_KEY);
+                      setResumeData(null);
+                    }
+                  }}>
+                    <div className="role-name">{r.name}</div>
+                    <div className="role-desc">{r.desc}</div>
+                  </button>
+                ))}
+              </div>
               {historyData.length > 0 && (
                 <button className="history-link" onClick={() => setShowHistory(true)}>
                   Посмотреть мои прошлые ответы ({historyData.length})
                 </button>
               )}
-              <div className="start-note">Выберите роль слева, затем начните интервью</div>
               <button className="start-btn" onClick={startInterview}>Начать интервью →</button>
             </div>
           )}
