@@ -555,7 +555,7 @@ export default function Home() {
       {resumeBanner}
       <div className="layout">
         <div className="sidebar">
-          {screen !== 'start' ? (
+          {screen !== 'start' && (
             <>
               <div className="sidebar-identity">
                 <div className="si-name">{userName}</div>
